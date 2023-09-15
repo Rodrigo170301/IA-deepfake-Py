@@ -1,0 +1,75 @@
+import tensorflow as tf
+import pandas as pd
+import os
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
+
+# Se definen las rutas del corpus de entrenamiento y validación
+direccion_cv = 'C:/Users/axelr/Downloads/IAD/'
+direccion_val = 'C:/Users/axelr/Downloads/IAD/faces_224/'
+
+# Leer el archivo CSV
+metadata = pd.read_csv(os.path.join(direccion_cv, 'metadata.csv'))
+
+# Contar la cantidad de muestras reales y falsas
+cantidad_reales = metadata['label'].value_counts()['REAL']
+cantidad_falsas = metadata['label'].value_counts()['FAKE']
+print("Cantidad de muestras reales:", cantidad_reales)
+print("Cantidad de muestras falsas:", cantidad_falsas)
+
+
+# Mostrar dos ejemplos de muestras reales
+muestras_reales = metadata[metadata['label'] == 'REAL'].sample(2)
+print("Ejemplos de muestras reales:")
+print(muestras_reales['filename'].tolist())
+
+# Mostrar dos ejemplos de muestras falsas
+muestras_falsas = metadata[metadata['label'] == 'FAKE'].sample(2)
+print("Ejemplos de muestras falsas:")
+print(muestras_falsas['filename'].tolist())
+
+# Analizar imágenes
+train_datagen = ImageDataGenerator(
+    rescale=1./255,
+    shear_range=0.2,
+    zoom_range=0.2,
+    horizontal_flip=True)
+
+train_generator = train_datagen.flow_from_dataframe(
+    dataframe=metadata,
+    directory=direccion_val,
+    x_col='filename',
+    y_col='label',
+    target_size=(150, 150),
+    batch_size=32,
+    class_mode='binary')
+
+val_datagen = ImageDataGenerator(rescale=1./255)
+
+val_generator = val_datagen.flow_from_directory(
+    direccion_val,
+    target_size=(150, 150),
+    batch_size=32,
+    class_mode='binary')
+
+# Crear modelo de red neuronal convolucional
+model = tf.keras.models.Sequential([
+    tf.keras.layers.Conv2D(32, (3, 3), activation='relu', input_shape=(150, 150, 3)),
+    tf.keras.layers.MaxPooling2D(2, 2),
+    tf.keras.layers.Conv2D(64, (3, 3), activation='relu'),
+    tf.keras.layers.MaxPooling2D(2, 2),
+    tf.keras.layers.Conv2D(128, (3, 3), activation='relu'),
+    tf.keras.layers.MaxPooling2D(2, 2),
+    tf.keras.layers.Flatten(),
+    tf.keras.layers.Dense(128, activation='relu'),
+    tf.keras.layers.Dropout(0.5),
+    tf.keras.layers.Dense(1, activation='sigmoid')
+])
+
+# Compilar el modelo
+model.compile(loss='binary_crossentropy', optimizer='rmsprop', metrics=['accuracy'])
+
+# Entrenar el modelo
+history = model.fit(
+    train_generator,
+    epochs=1,
+    validation_data=val_generator)
